@@ -12,11 +12,11 @@ public class Task {
     private String id;
     private String title;
     private String description;
-    // private TaskStatus status;
+    private TaskStatus status;
     private String assignedStudentId;
     private String supervisorId;
     private String internshipId;
-    private LocalDate dueDate; // New field for due date
+    private LocalDate dueDate;
 
     // Constructors
     public Task() {
@@ -97,5 +97,13 @@ public class Task {
 
     public void setDueDate(LocalDate dueDate) {
         this.dueDate = dueDate;
+    }
+
+    public TaskStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(TaskStatus status) {
+        this.status = status;
     }
 }
