@@ -1,8 +1,8 @@
 package com.internlink.internlink.service;
 
 import java.util.List;
-import java.util.Optional;
 
+import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -22,51 +22,47 @@ public class StudentService {
         return mongoTemplate.findAll(Student.class);
     }
 
-    public Optional<Student> getStudentById(String studentId) {
-        Query query = new Query(Criteria.where("studentId").is(studentId));
-        Student student = mongoTemplate.findOne(query, Student.class);
-        return Optional.ofNullable(student);
+    public Student getStudentById(String studentId) {
+        return mongoTemplate.findOne(new Query(Criteria.where("studentId").is(studentId)), Student.class);
     }
 
     public Student register(Student student) {
         return mongoTemplate.save(student);
     }
 
-    public Optional<Student> updateStudent(String studentId, Student updatedStudent) {
-        return getStudentById(studentId).map(student -> {
-            student.setName(updatedStudent.getName());
-            student.setEmail(updatedStudent.getEmail());
-            student.setMajor(updatedStudent.getMajor());
-            student.setUniversity(updatedStudent.getUniversity());
-            return mongoTemplate.save(student);
-        });
+    public Student updateStudent(String studentId, Student updatedStudent) {
+        Student student = getStudentById(studentId);
+        if (student == null) {
+            return null;
+        }
+        student.setName(updatedStudent.getName());
+        student.setEmail(updatedStudent.getEmail());
+        student.setMajor(updatedStudent.getMajor());
+        student.setUniversity(updatedStudent.getUniversity());
+        return mongoTemplate.save(student);
     }
 
     public void deleteStudent(String studentId) {
-        getStudentById(studentId).ifPresent(mongoTemplate::remove);
-    }
-
-    public String getStudentNameById(String studentId) {
-        return getStudentById(studentId)
-                .map(Student::getName)
-                .orElseThrow(() -> new RuntimeException("Student not found with ID: " + studentId));
+        Student student = getStudentById(studentId);
+        if (student != null) {
+            mongoTemplate.remove(student);
+        }
     }
 
     public List<Student> getStudentsByFacultySupervisor(String facultySupervisorId) {
-        // Step 1: Find the faculty supervisor document
-        Query facultyQuery = new Query(Criteria.where("_id").is(facultySupervisorId));
-        FacultySupervisor facultySupervisor = mongoTemplate.findOne(facultyQuery, FacultySupervisor.class);
+        FacultySupervisor facultySupervisor = mongoTemplate.findOne(
+                new Query(Criteria.where("_id").is(new ObjectId(facultySupervisorId))), FacultySupervisor.class);
 
-        @SuppressWarnings("null")
-        String supervisorId = facultySupervisor.getId(); // Assuming getter method exists
+        if (facultySupervisor == null) {
+            throw new RuntimeException("Faculty Supervisor not found");
+        }
 
-        // Step 3: Find students with matching supervisorId
-        Query studentQuery = new Query(Criteria.where("supervisorId").is(supervisorId));
-        return mongoTemplate.find(studentQuery, Student.class);
+        return mongoTemplate.find(new Query(Criteria.where("supervisorId").is(facultySupervisor.getSupervisorId())),
+                Student.class);
     }
 
     public List<Student> getStudentsByCompanySupervisor(String companySupervisorId) {
-        Query query = new Query(Criteria.where("companySupervisorId").is(companySupervisorId));
-        return mongoTemplate.find(query, Student.class);
+        return mongoTemplate.find(new Query(Criteria.where("companySupervisorId").is(companySupervisorId)),
+                Student.class);
     }
 }
