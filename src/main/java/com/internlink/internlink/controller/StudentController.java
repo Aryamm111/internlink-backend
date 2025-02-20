@@ -1,9 +1,10 @@
 package com.internlink.internlink.controller;
 
-import java.util.Optional;
+import java.util.List;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -13,79 +14,85 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.internlink.internlink.model.Student;
 import com.internlink.internlink.service.StudentService;
+import com.internlink.internlink.util.JwtUtil;
+
+import io.jsonwebtoken.Claims;
 
 @CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 @RestController
 @RequestMapping("/api/students")
 public class StudentController {
 
-    // @Autowired
-    // private JwtUtil jwtUtil;
+    @Autowired
+    private JwtUtil jwtUtil;
 
     @Autowired
     private StudentService studentService;
 
     @Autowired
-    private MongoTemplate mongoTemplate;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
-    // @GetMapping
-    // public ResponseEntity<List<Student>>
-    // getStudentsBySupervisor(@RequestHeader("Authorization") String authHeader) {
-    // String token = authHeader.substring(7);
-    // Claims claims = jwtUtil.extractClaims(token);
+    @GetMapping
+    public ResponseEntity<?> getStudentsBySupervisor(@RequestHeader("Authorization") String authHeader) {
+        String token = authHeader.substring(7);
+        Claims claims = jwtUtil.extractClaims(token);
 
-    // String supervisorRole = claims.get("role", String.class);
-    // String supervisorId = claims.getId();
+        String supervisorRole = claims.get("role", String.class);
+        String supervisorId = claims.getSubject();
 
-    // if (!supervisorRole.equalsIgnoreCase("facultySupervisor")
-    // && !supervisorRole.equalsIgnoreCase("companySupervisor")) {
-    // throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid supervisor
-    // role");
-    // }
+        if (!Set.of("facultySupervisor", "companySupervisor").contains(supervisorRole.toLowerCase())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Invalid supervisor role");
+        }
 
-    // List<Student> students = supervisorRole.equalsIgnoreCase("facultySupervisor")
-    // ? studentService.getStudentsByFacultySupervisor(supervisorId)
-    // : studentService.getStudentsByCompanySupervisor(supervisorId);
+        List<Student> students = supervisorRole.equalsIgnoreCase("facultySupervisor")
+                ? studentService.getStudentsByFacultySupervisor(supervisorId)
+                : studentService.getStudentsByCompanySupervisor(supervisorId);
 
-    // return ResponseEntity.ok(students);
-    // }
+        return ResponseEntity.ok(students);
+    }
 
     @GetMapping("/{studentId}")
-    public ResponseEntity<Student> getStudentById(@PathVariable String studentId) {
-        Optional<Student> student = studentService.getStudentById(studentId);
-        return student.map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<?> getStudentById(@PathVariable String studentId) {
+        Student student = studentService.getStudentById(studentId);
+        return (student != null) ? ResponseEntity.ok(student)
+                : ResponseEntity.status(HttpStatus.NOT_FOUND).body("Student not found");
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> registerStudent(@RequestBody Student student) {
+    public ResponseEntity<String> registerStudent(@RequestBody Student student) {
         student.setPassword(passwordEncoder.encode(student.getPassword()));
         student.setUserRole("STUDENT");
-        mongoTemplate.save(student, "students");
+        studentService.register(student);
         return ResponseEntity.ok("Student registered successfully!");
     }
 
     @PutMapping("/{studentId}")
-    public ResponseEntity<Student> updateStudent(@PathVariable String studentId, @RequestBody Student updatedStudent) {
-        Optional<Student> student = studentService.updateStudent(studentId, updatedStudent);
-        return student.map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<?> updateStudent(@PathVariable String studentId, @RequestBody Student updatedStudent) {
+        Student student = studentService.updateStudent(studentId, updatedStudent);
+        return (student != null) ? ResponseEntity.ok(student)
+                : ResponseEntity.status(HttpStatus.NOT_FOUND).body("Student not found");
     }
 
     @DeleteMapping("/{studentId}")
-    public ResponseEntity<Void> deleteStudent(@PathVariable String studentId) {
+    public ResponseEntity<String> deleteStudent(@PathVariable String studentId) {
+        Student student = studentService.getStudentById(studentId);
+        if (student == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Student not found");
+        }
         studentService.deleteStudent(studentId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok("Student deleted successfully");
     }
 
-    @GetMapping("/student/{studentId}/name")
-    public ResponseEntity<String> getStudentName(@PathVariable String studentId) {
-        return ResponseEntity.ok(studentService.getStudentNameById(studentId));
+    @GetMapping("/{studentId}/name")
+    public ResponseEntity<?> getStudentName(@PathVariable String studentId) {
+        Student student = studentService.getStudentById(studentId);
+        return (student != null) ? ResponseEntity.ok(student.getName())
+                : ResponseEntity.status(HttpStatus.NOT_FOUND).body("Student not found");
     }
 }
